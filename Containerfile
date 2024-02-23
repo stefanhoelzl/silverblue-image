@@ -12,5 +12,8 @@ RUN rpm-ostree cliwrap install-to-root / && \
     # replace kernel with custom built kernel
     rpm-ostree override replace /rpms/* && \
     rm -rf /rpms && \
+    # install additional packages
+    rpm-ostree install \
+        mozilla-openh264 && \
     rpm-ostree cleanup -m && \
     ostree container commit
