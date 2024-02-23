@@ -1,0 +1,47 @@
+From 6e77e6de7582f35138fa1c7523268602ecb2e0a0 Mon Sep 17 00:00:00 2001
+From: Arunpravin Paneer Selvam <Arunpravin.PaneerSelvam@amd.com>
+Date: Tue, 6 Feb 2024 10:39:24 -0800
+Subject: [PATCH] drm/buddy: Improve alloc_range error handling routine
+
+If alloc_range() couldn't allocate the requuired size,
+return -ENOSPC.
+
+Signed-off-by: Arunpravin Paneer Selvam <Arunpravin.PaneerSelvam@amd.com>
+---
+ drivers/gpu/drm/drm_buddy.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/drm_buddy.c b/drivers/gpu/drm/drm_buddy.c
+index f57e6d74fb0e..d5aba6392da0 100644
+--- a/drivers/gpu/drm/drm_buddy.c
++++ b/drivers/gpu/drm/drm_buddy.c
+@@ -483,9 +483,9 @@ static int __alloc_range(struct drm_buddy *mm,
+ 			 struct list_head *blocks,
+ 			 u64 *total_allocated_on_err)
+ {
++	u64 total_allocated = 0, allocated_size = 0;
+ 	struct drm_buddy_block *block;
+ 	struct drm_buddy_block *buddy;
+-	u64 total_allocated = 0;
+ 	LIST_HEAD(allocated);
+ 	u64 end;
+ 	int err;
+@@ -539,6 +539,15 @@ static int __alloc_range(struct drm_buddy *mm,
+ 	} while (1);
+ 
+ 	list_splice_tail(&allocated, blocks);
++
++	list_for_each_entry(block, blocks, link)
++		allocated_size += drm_buddy_block_size(mm, block);
++
++	if (allocated_size < size) {
++		err = -ENOSPC;
++		goto err_free;
++	}
++
+ 	return 0;
+ 
+ err_undo:
+-- 
+2.25.1
+
