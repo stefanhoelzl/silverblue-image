@@ -1,0 +1,30 @@
+name: build-image
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+env:
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_NAME: fedora-silverblue
+  IMAGE_TAGS: latest
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: redhat-actions/buildah-build@v2
+        with:
+          tags: ${{ env.IMAGE_TAGS }}
+          containerfiles: |
+            ./Containerfile
+          image: ${{ env.IMAGE_NAME }}
+
+      - uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          tags: ${{ env.IMAGE_TAGS }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
