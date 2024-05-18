@@ -8,5 +8,4 @@ RUN rpm-ostree cliwrap install-to-root / && \
         /packages/*.rpm \
         powertop  && \
     rm -rf /packages && \
-    rpm-ostree cleanup -m && \
-    ostree container commit
+    rpm-ostree cleanup -m
