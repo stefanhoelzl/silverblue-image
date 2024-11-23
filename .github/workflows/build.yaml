@@ -1,8 +1,6 @@
 name: build-image
 on:
   push:
-    branches:
-      - main
   schedule:
     - cron: '0 15 * * *'
   workflow_dispatch:
@@ -25,6 +23,7 @@ jobs:
           image: ${{ env.IMAGE_NAME }}
 
       - uses: redhat-actions/push-to-registry@v2
+        if: github.ref_name == 'main'
         with:
           image: ${{ env.IMAGE_NAME }}
           tags: ${{ env.IMAGE_TAGS }}
