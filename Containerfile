@@ -4,8 +4,7 @@ COPY packages /packages
 RUN rpm-ostree cliwrap install-to-root / && \
     rpm-ostree override remove noopenh264 && \
     # upgrade to kernel 6.12 to avoid amdgpu bug
-    rpm-ostree override replace /packages/kernel-*.rpm && \
-    rm -rf /packages/kernel-*.rpm && \
+    rpm-ostree override replace /packages/kernel/*.rpm && \
     # install additional packages
     rpm-ostree install \
         /packages/*.rpm \
