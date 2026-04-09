@@ -1,10 +1,9 @@
 FROM quay.io/fedora/fedora-silverblue:latest
 
-RUN rpm-ostree install \
+RUN dnf5 -y install \
     https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm && \
-    rpm-ostree cleanup -m
-
-RUN rpm-ostree override remove noopenh264 && \
-    rpm-ostree install openh264 gstreamer1-plugin-openh264 mozilla-openh264 powertop \
+    dnf5 -y swap noopenh264 openh264 && \
+    dnf5 -y install gstreamer1-plugin-openh264 mozilla-openh264 powertop \
     libheif-freeworld heif-pixbuf-loader libheif-tools podman-compose && \
-    rpm-ostree cleanup -m
+    dnf5 clean all && \
+    ostree container commit
