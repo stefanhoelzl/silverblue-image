@@ -1,8 +1,5 @@
 FROM quay.io/fedora/fedora-silverblue:latest
 
-RUN rpm-ostree override remove noopenh264 && \
-    rpm-ostree cleanup -m
-
 RUN rpm-ostree install \
     https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm && \
     rpm-ostree cleanup -m
