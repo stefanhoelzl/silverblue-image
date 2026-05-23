@@ -13,16 +13,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: redhat-actions/buildah-build@v2
+      - uses: redhat-actions/buildah-build@v2.13
         with:
           tags: ${{ env.IMAGE_TAGS }}
           containerfiles: |
             ./Containerfile
           image: ${{ env.IMAGE_NAME }}
 
-      - uses: redhat-actions/push-to-registry@v2
+      - uses: redhat-actions/push-to-registry@v2.8
         if: github.ref_name == 'main'
         with:
           image: ${{ env.IMAGE_NAME }}
