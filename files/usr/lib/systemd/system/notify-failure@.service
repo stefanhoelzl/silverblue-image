@@ -1,0 +1,12 @@
+[Unit]
+Description=Desktop notification that %i failed
+Documentation=file:/usr/libexec/notify-failure
+# Deliberately no OnFailure= of its own: a notifier that notifies about itself loops.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/notify-failure %i
+# notify-send -A blocks until the button is clicked, so systemd must not time it out. The
+# script bounds its own wait instead (8h), the same shape as the user-side
+# cloud-mount-failed@.service.
+TimeoutStartSec=infinity

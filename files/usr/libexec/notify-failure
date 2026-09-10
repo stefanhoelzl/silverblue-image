@@ -1,0 +1,90 @@
+#!/usr/bin/bash
+# Report a failed system unit on the desktop, with a button that retries it. Invoked as
+# OnFailure=notify-failure@%n.service, so $1 is the unit that failed.
+#
+# WHY IT WAITS FOR A SESSION
+#   The units using this run shortly after boot, typically before anyone has logged in.
+#   Notifying immediately would reliably notify nobody. If no session ever appears this
+#   exits 0: the failure is still in the journal and in `systemctl --failed`, and a lost
+#   notification must not turn into a second failed unit.
+#
+# WHY IT OFFERS A BUTTON AND NOT JUST TEXT
+#   A notification that says "go read journalctl" is a report, not a recovery path. For
+#   these units the whole recovery is one `systemctl start`, so it fits in a button.
+#   `notify-send -A` implies --wait: it blocks until the button is clicked and prints the
+#   action name. That is why the unit sets TimeoutStartSec=infinity and the bound lives
+#   here in `timeout` instead - systemd must not kill the wait out from under it.
+#
+# WHY IT RUNS AS A SYSTEM UNIT AND DUPLICATES cloud-mount-failed@.service
+#   OnFailure= resolves inside one manager: a system unit can only activate system units.
+#   The units this watches need root, so the user-manager version of this idiom in
+#   ~/.config/systemd/user cannot be reached from them. Hence runuser and the search for a
+#   session bus, both of which a user unit gets for free.
+#
+# Output goes to the journal under this unit - no separate logfile, unlike the user-side
+# script, which keeps its own history precisely because it can.
+
+set -uo pipefail
+
+readonly UNIT=${1:?usage: notify-failure <unit>}
+readonly WAIT_SECS=300   # how long to wait for someone to log in
+readonly POLL_SECS=5
+readonly REPLY_SECS=8h   # how long the notification stays clickable
+
+log() { echo "notify-failure: $*"; }
+
+# Every human user with a running session bus. uid >= 1000 skips the display manager's own
+# session (gdm), which can accept notifications nobody will ever see.
+session_uids() {
+    local runtime uid
+    for runtime in /run/user/*; do
+        uid=${runtime##*/}
+        [[ $uid =~ ^[0-9]+$ ]] || continue
+        (( uid >= 1000 )) || continue
+        [[ -S $runtime/bus ]] || continue
+        echo "$uid"
+    done
+}
+
+deadline=$(( SECONDS + WAIT_SECS ))
+while :; do
+    mapfile -t uids < <(session_uids)
+    (( ${#uids[@]} > 0 )) && break
+    if (( SECONDS >= deadline )); then
+        log "no desktop session after ${WAIT_SECS}s, giving up on notifying about $UNIT"
+        exit 0
+    fi
+    sleep "$POLL_SECS"
+done
+
+for uid in "${uids[@]}"; do
+    user=$(id -nu "$uid" 2>/dev/null) || continue
+    log "notifying $user about $UNIT"
+
+    action=$(timeout "$REPLY_SECS" runuser -u "$user" -- env \
+        XDG_RUNTIME_DIR="/run/user/$uid" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+        notify-send \
+            --app-name="$UNIT" \
+            --urgency=critical \
+            --icon=dialog-error \
+            --action=retry=Retry \
+            "$UNIT failed" \
+            "systemctl status $UNIT")
+
+    case $action in
+        retry)
+            log "$user asked to retry $UNIT"
+            # --no-block so this handler exits now: if the retry fails too, systemd fires a
+            # fresh instance of this unit, which it cannot do while this one still runs.
+            systemctl --no-block start "$UNIT" || log "could not enqueue start of $UNIT"
+            break
+            ;;
+        "")
+            log "$user dismissed the notification, or it timed out after $REPLY_SECS"
+            ;;
+        *)
+            log "unexpected action '$action' from $user"
+            ;;
+    esac
+done
