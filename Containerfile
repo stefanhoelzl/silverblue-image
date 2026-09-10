@@ -23,7 +23,10 @@ RUN dnf5 -y install \
     dnf5 clean all && \
     # /var in the image is copied onto the machine at first install, so dnf's leftovers
     # there would ship. `ostree container commit` below clears /var/cache but not these.
-    rm -rf /var/log/dnf5.log /var/lib/dnf
+    rm -rf /var/log/dnf5.log /var/lib/dnf && \
+    # files/etc/default/earlyoom replaces an rpm %config(noreplace) file, so installing
+    # earlyoom drops its own copy alongside as .rpmnew. Nothing reads it; don't ship it.
+    rm -f /etc/default/earlyoom.rpmnew
 
 # --- finalize ---
 # commit canonicalizes /run and /var/cache; lint verifies what commit does not fix. Both are
