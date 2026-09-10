@@ -1,0 +1,27 @@
+# Packages layered onto Fedora Silverblue by this image.
+#
+# Read by the Containerfile: `dnf5 -y install $(grep -hv '^#' <this file>)`.
+# Comments must be on their own line — a trailing `pkg # why` would be passed to dnf.
+# Codec swaps and anything needing --allowerasing stay in the Containerfile instead.
+
+# H.264 / HEVC playback
+gstreamer1-plugin-openh264
+mozilla-openh264
+
+# HEIF/HEIC images
+libheif-freeworld
+heif-pixbuf-loader
+libheif-tools
+
+# Proton VPN and its tray icon.
+# proton-vpn-gtk-app directly, NOT the proton-vpn-gnome-desktop metapackage: that pulls in
+# proton-vpn-daemon, whose %posttrans scriptlet calls systemctl and aborts the build. The
+# daemon only provides split tunneling (a paid-plan feature) and drags in clang/llvm/bcc
+# for its eBPF monitor. The keyring backend is transitive but named here deliberately.
+proton-vpn-gtk-app
+python3-proton-keyring-linux
+gnome-shell-extension-appindicator
+
+# tools
+podman-compose
+powertop

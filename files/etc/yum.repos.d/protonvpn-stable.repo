@@ -1,0 +1,11 @@
+# Hand-written rather than installed from protonvpn-stable-release: that RPM's URL pins an
+# exact package version (.../protonvpn-stable-release-1.0.4-1.noarch.rpm) with no "latest"
+# alias, so installing it would mean bumping a version here on every Proton release.
+# Deliberately without skip_if_unavailable: a rebase to a Fedora that Proton has not
+# published for should fail the build loudly, not silently drop the VPN from the image.
+[protonvpn-stable]
+name=Proton VPN Fedora Stable repository
+baseurl=https://repo.protonvpn.com/fedora-$releasever-stable
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.protonvpn.com/fedora-$releasever-stable/public_key.asc
