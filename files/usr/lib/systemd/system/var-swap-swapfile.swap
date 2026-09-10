@@ -3,6 +3,9 @@ Description=32 GiB disk swapfile on /var
 # Absent wherever make-swapfile skipped (non-btrfs /var, too little room): condition-skip
 # rather than a failed unit on every boot.
 ConditionPathExists=/var/swap/swapfile
+# A condition-skip is not a failure, so this only fires when swapon genuinely refuses the
+# file - a wrong SELinux label being the likely cause.
+OnFailure=notify-failure@%n.service
 
 [Swap]
 What=/var/swap/swapfile
