@@ -1,0 +1,12 @@
+# Access to Apple USB devices (vendor 05ac) for libimobiledevice/idevicerestore, which talk
+# to the device directly rather than through a kernel driver - including in DFU and recovery
+# mode, where the device exposes no interface a driver would claim.
+#
+# uaccess grants the device to whoever is logged in at the local seat, via an ACL that
+# follows session changes, instead of widening the node's mode bits for every process on the
+# machine. The rule has to run before systemd's 73-seat-late.rules, which is what applies the
+# ACL to tagged devices - hence the 39- prefix.
+#
+# The ACL follows the *seat*, so a session with no seat does not get it: running
+# idevicerestore over SSH needs root, where MODE="0666" would have worked unprivileged.
+SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", TAG+="uaccess"
