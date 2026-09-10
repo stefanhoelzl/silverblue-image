@@ -20,5 +20,20 @@ RUN printf '%s\n' \
     proton-vpn-gnome-desktop gnome-shell-extension-appindicator && \
     rm -f /usr/bin/systemctl && \
     mv /usr/bin/systemctl.real /usr/bin/systemctl && \
+    mkdir -p /etc/sysctl.d /etc/systemd/oomd.conf.d /etc/systemd/coredump.conf.d && \
+    printf '%s\n' \
+    '# zram-only swap: prefer compressing anonymous pages over evicting' \
+    '# file-backed (incl. executable) pages, and skip swap readahead.' \
+    'vm.swappiness=180' \
+    'vm.page-cluster=0' \
+    > /etc/sysctl.d/90-zram-tuning.conf && \
+    printf '%s\n' \
+    '[OOM]' \
+    'DefaultMemoryPressureDurationSec=5s' \
+    > /etc/systemd/oomd.conf.d/90-fast-reaction.conf && \
+    printf '%s\n' \
+    '[Coredump]' \
+    'MaxUse=200M' \
+    > /etc/systemd/coredump.conf.d/90-max-use.conf && \
     dnf5 clean all && \
     ostree container commit
