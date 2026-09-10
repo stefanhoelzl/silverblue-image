@@ -1,0 +1,18 @@
+[Unit]
+Description=Desktop notification when earlyoom kills a process
+Documentation=file:/usr/libexec/notify-oom-kill
+# Ordering only. journalctl --follow waits happily if earlyoom is not running yet, and this
+# must not pull earlyoom in: whether the killer runs is earlyoom.service's own business.
+After=earlyoom.service
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/notify-oom-kill
+# Runs as root: runuser needs it to reach a user's session bus. Deliberately not
+# DynamicUser - that is the whole reason this exists as a separate unit rather than an
+# earlyoom -N hook, see the script header.
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

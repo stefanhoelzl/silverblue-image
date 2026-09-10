@@ -28,5 +28,6 @@ powertop
 
 # Per-process OOM killer. Kills the single largest offender before the machine thrashes;
 # systemd-oomd, which stays installed, can only kill whole cgroups. Configured in
-# files/etc/default/earlyoom and enabled by the wants symlink under files/usr/lib/systemd/.
+# files/etc/default/earlyoom and enabled by the wants symlink under files/usr/lib/systemd/;
+# notify-oom-kill.service puts each kill on the desktop.
 earlyoom

@@ -1,0 +1,86 @@
+#!/usr/bin/bash
+# Report earlyoom's kills on the desktop. earlyoom logs every kill to the journal in full
+# detail; this turns those lines into a notification so a process vanishing is not silent.
+#
+# WHY IT FOLLOWS THE JOURNAL AND DOES NOT USE earlyoom -N
+#   earlyoom can run a script after each kill (-N), but its unit runs DynamicUser=true, so
+#   that script gets a random transient uid. Reaching a session bus needs runuser, which
+#   needs root: /run/user/<uid> is 0700, so the bus socket inside it is unreachable to any
+#   other user no matter how permissive the socket itself is. Making -N work would mean
+#   stripping DynamicUser off earlyoom.service and running it as root - raising it from
+#   CAP_KILL to full privilege to gain a notification. Following the journal from a
+#   separate root service keeps the upstream unit exactly as Fedora ships it.
+#   The log line also carries more than -N does: -N passes name, pid, uid and cmdline,
+#   while the journal line adds oom_score, oom_score_adj and VmRSS.
+#
+# WHY IT DOES NOT OFFER A BUTTON
+#   Unlike notify-failure, there is nothing to retry: the process is already gone. So no
+#   --wait, and the unit needs no TimeoutStartSec=infinity.
+#
+# The session lookup below duplicates notify-failure's, deliberately and for the same
+# reason that script gives for duplicating the user-side one: the shared alternative is a
+# sourced library, and two twelve-line copies are easier to read than one indirection.
+
+set -uo pipefail
+
+readonly UNIT=earlyoom.service
+
+log() { echo "notify-oom-kill: $*"; }
+
+# Every human user with a running session bus. uid >= 1000 skips the display manager's own
+# session (gdm), which can accept notifications nobody will ever see.
+session_uids() {
+    local runtime uid
+    for runtime in /run/user/*; do
+        uid=${runtime##*/}
+        [[ $uid =~ ^[0-9]+$ ]] || continue
+        (( uid >= 1000 )) || continue
+        [[ -S $runtime/bus ]] || continue
+        echo "$uid"
+    done
+}
+
+notify_all() {
+    local summary=$1 body=$2 uid user
+    mapfile -t uids < <(session_uids)
+    if (( ${#uids[@]} == 0 )); then
+        log "no desktop session to notify: $summary"
+        return
+    fi
+    for uid in "${uids[@]}"; do
+        user=$(id -nu "$uid" 2>/dev/null) || continue
+        runuser -u "$user" -- env \
+            XDG_RUNTIME_DIR="/run/user/$uid" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+            notify-send \
+                --app-name=earlyoom \
+                --urgency=critical \
+                --icon=dialog-warning \
+                "$summary" "$body" \
+            || log "could not notify $user"
+    done
+}
+
+# -n 0 starts at the end: only kills from now on, not a backlog replayed at every boot.
+# --output=cat drops the syslog prefix, leaving earlyoom's own line.
+log "following $UNIT"
+journalctl --unit="$UNIT" --follow --lines=0 --output=cat | while read -r line; do
+    # sending SIGKILL to process 3105057 uid 1000 "java": oom_score 824, oom_score_adj 200,
+    #   VmRSS 1426 MiB, cmdline "/usr/lib/jvm/java-21-openjdk/bin/java --add-opens=..."
+    [[ $line =~ ^sending\ (SIG[A-Z]+)\ to\ process\ ([0-9]+)\ uid\ [0-9]+\ \"([^\"]*)\":.*VmRSS\ (-?[0-9]+)\ MiB ]] || continue
+    signal=${BASH_REMATCH[1]}
+    pid=${BASH_REMATCH[2]}
+    name=${BASH_REMATCH[3]}
+    rss=${BASH_REMATCH[4]}
+
+    # cmdline is the most useful field for telling two same-named processes apart, but it
+    # is long; a notification body that wraps forever is worse than one that is trimmed.
+    cmdline=${line#*cmdline \"}
+    cmdline=${cmdline%\"*}
+    (( ${#cmdline} > 160 )) && cmdline="${cmdline:0:160}…"
+
+    log "$signal $name (pid $pid, ${rss} MiB)"
+    notify_all "Out of memory: killed $name" \
+               "$signal to pid $pid, ${rss} MiB resident
+$cmdline"
+done
