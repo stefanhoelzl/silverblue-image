@@ -1,0 +1,18 @@
+[Unit]
+Description=Create the /var swapfile if it is missing
+Documentation=file:/usr/libexec/make-swapfile
+# One-shot per machine. The script is idempotent anyway; this keeps later boots cheap.
+ConditionPathExists=!/var/swap/swapfile
+RequiresMountsFor=/var
+# Ordered after the target that pulls it in, so a first run that writes 32 GiB happens once
+# boot is done rather than competing for I/O with the session coming up. (Wants= alone
+# implies no ordering, so this is about I/O contention, not about unblocking the target.)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/make-swapfile
+
+[Install]
+WantedBy=multi-user.target

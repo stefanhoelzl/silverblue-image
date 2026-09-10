@@ -1,0 +1,58 @@
+#!/usr/bin/bash
+# Create the swapfile that var-swap-swapfile.swap activates. Runs once; the unit's
+# ConditionPathExists makes every later boot a no-op.
+#
+# Why a script and not a file under files/: a btrfs swapfile must be NODATACOW and
+# physically preallocated on the filesystem it lives on. Neither property survives a
+# container layer copy or ostree's hardlinking into /ostree/repo, and the file would add
+# 32 GiB to every image pull. So the image ships the recipe and runs it against the real
+# /var instead.
+#
+# Every check below is a reason to do nothing rather than to fail: this image is public,
+# and a machine that is not this one should boot unchanged.
+
+set -euo pipefail
+
+readonly SWAPFILE=/var/swap/swapfile
+readonly SIZE_GIB=32       # ~= the 30 GiB of RAM, leaving room to back hibernation later
+readonly HEADROOM_GIB=10   # refuse to leave /var this close to full
+
+log() { echo "make-swapfile: $*"; }
+
+if [[ -e $SWAPFILE ]]; then
+    log "$SWAPFILE exists, nothing to do"
+    exit 0
+fi
+
+fstype=$(findmnt --noheadings --output FSTYPE --target /var)
+if [[ $fstype != btrfs ]]; then
+    log "/var is $fstype, not btrfs - skipping (mkswapfile is btrfs-only)"
+    exit 0
+fi
+
+avail_gib=$(( $(findmnt --bytes --noheadings --output AVAIL --target /var) / 1024**3 ))
+if (( avail_gib < SIZE_GIB + HEADROOM_GIB )); then
+    log "/var has ${avail_gib} GiB free, want $(( SIZE_GIB + HEADROOM_GIB )) - skipping"
+    exit 0
+fi
+
+log "creating ${SIZE_GIB} GiB swapfile at $SWAPFILE"
+mkdir -p "$(dirname "$SWAPFILE")"
+
+# Drop a partial file if anything below fails, so the next boot retries from scratch rather
+# than finding an unusable file and condition-skipping forever.
+trap 'rm -f "$SWAPFILE"' ERR
+
+# mkswapfile sets NODATACOW, preallocates, and runs mkswap in one step. Needs
+# btrfs-progs >= 6.1; the Silverblue base is well past that (6.19.1 as built).
+btrfs filesystem mkswapfile --size "${SIZE_GIB}g" "$SWAPFILE"
+chmod 0600 "$SWAPFILE"
+
+# Fedora's policy maps swapfile_t to /swapfile; a file under /var/swap inherits var_t.
+# Whether swapon actually refuses var_t is untested, so set the label where we can and let
+# the .swap unit surface a real denial rather than guessing at it here.
+chcon -t swapfile_t "$SWAPFILE" || log "could not set swapfile_t label, continuing"
+
+trap - ERR
+log "created, activating"
+systemctl start var-swap-swapfile.swap
