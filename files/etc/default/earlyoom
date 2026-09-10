@@ -3,29 +3,58 @@
 # so it is a full copy of the package default with only the changes below; the package's
 # own version lands next to it as earlyoom.rpmnew, which the build deletes.
 #
+# The point of earlyoom here is that it kills ONE process. systemd-oomd cannot: it only
+# kills whole cgroups (systemd RFE #25853), which on this machine took out all ~120
+# CodeHydra processes at once.
+#
 # Changed from the Fedora Workstation SIG default (pagure.io/fedora-workstation/issue/119):
 #
-#   -m 20,10   SIGTERM at 20% of earlyoom's "user mem total" (MemAvailable+AnonPages),
-#              SIGKILL at 10%. The default -m 4 is far too late on this machine: headroom
-#              for the app is ~17 GB against a 17-20 GB working set, so by 10% it is
-#              already thrashing. 20% fires while the desktop is still responsive.
-#   -M dropped The default -M 409600 caps the trigger at 400 MiB available, and earlyoom
-#              uses the LOWER of -m and -M. Keeping it would pin the threshold at 400 MiB
-#              and make -m 20,10 dead weight.
-#   -s 100,100 Ignore swap entirely. earlyoom needs BOTH memory and swap below their
-#              thresholds; with a 32 GiB swapfile, free swap would otherwise gate it off
-#              and it would never fire. Both halves are required: a bare -s 100 leaves the
-#              SIGKILL threshold at the PERCENT/2 default, so with swap more than 50% free
-#              earlyoom would only ever escalate as far as SIGTERM.
-#   --avoid    The SIG list, plus codehydra. --avoid matches /proc/PID/comm (first 15
-#              bytes only, hence the truncated names) and subtracts 300 from oom_score, so
-#              the victim is a build or a renderer rather than the compositor or the
-#              Electron browser process.
+#   --sort-by-rss   Rank by RSS instead of oom_score. This is the change that makes the
+#                   rest work. oom_score_adj is denominated in THOUSANDTHS OF RAM+SWAP,
+#                   which is 72 GiB here, so Firefox's adj=233 on an idle tab is worth
+#                   ~16.9 GiB of phantom RSS. Measured: an 8 GiB build scores 742 while a
+#                   70 MiB EMPTY preallocated Firefox process scores 823 - the build would
+#                   need ~16.9 GiB to be picked at all. Ranking by RSS ignores adj and
+#                   takes the process that is actually large.
+#                   Caveat: RSS counts shared pages, so it overstates what a kill returns
+#                   (that same 70 MiB Firefox process frees only 13 MiB).
 #
-# The point of earlyoom here is that it kills the single offending process. systemd-oomd
-# cannot: it only kills whole cgroups (systemd RFE #25853), which on this machine took out
-# all ~120 CodeHydra processes at once.
+#   no --prefer,    Deliberately no process lists. The SIG default carries a 30-name
+#   no --avoid,     --avoid list and a --prefer for Firefox tabs; both are dropped.
+#   no --ignore     Under --sort-by-rss the desktop is protected by BEING SMALL
+#                   (gnome-shell is ~350 MiB) rather than by being named, which cannot rot
+#                   the way a comm regex does - --avoid matches only the first 15 bytes of
+#                   a name, so it breaks silently when a process is renamed. --avoid also
+#                   misbehaved in testing when combined with --sort-by-rss, selecting the
+#                   very process it was told to protect.
+#
+#   --ignore-root-user
+#                   Never kill root-owned processes: systemd, journald, udevd,
+#                   NetworkManager, logind. A list-free way to fence off the system side.
+#                   Note it does NOT cover the desktop - gnome-shell runs as uid 1000.
+#                   It does shield a runaway root process, but with rootless podman the
+#                   builds this is aimed at are user-owned.
+#
+#   -m 20,10        SIGTERM at 20% of earlyoom's "user mem total" (MemAvailable+AnonPages),
+#                   SIGKILL at 10%. The default -m 4 is far too late on this machine:
+#                   headroom for the app is ~17 GB against a 17-20 GB working set, so by
+#                   10% it is already thrashing. 20% fires while the desktop still responds.
+#
+#   -M dropped      The default -M 409600 caps the trigger at 400 MiB available, and
+#                   earlyoom uses the LOWER of -m and -M. Keeping it would pin the
+#                   threshold at 400 MiB and make -m 20,10 dead weight.
+#
+#   -s 100,100      Ignore swap entirely. earlyoom needs BOTH memory and swap below their
+#                   thresholds, and var-swap-swapfile.swap adds 32 GiB of mostly-free swap
+#                   that would otherwise gate earlyoom off permanently. Both halves are
+#                   required: a bare -s 100 leaves the SIGKILL threshold at the PERCENT/2
+#                   default, so above 50% free swap it would only ever reach SIGTERM.
+#
+#   -r 300          Memory report every 5 minutes. The default of 1s is journal spam and
+#                   the SIG's 0 hides how close the machine got before a kill. Kills are
+#                   logged regardless of this setting - see notify-oom-kill.service, which
+#                   turns those log lines into a desktop notification.
 #
 # More documentation at `man earlyoom` or `earlyoom -h`.
 
-EARLYOOM_ARGS="-r 0 -m 20,10 -s 100,100 --prefer '^(Web Content|Isolated Web Co)$' --avoid '^(dnf|packagekitd|gnome-shell|gnome-session-c|gnome-session-b|lightdm|sddm|sddm-helper|gdm|gdm-wayland-ses|gdm-session-wor|gdm-x-session|Xorg|Xwayland|systemd|systemd-logind|dbus-daemon|dbus-broker|cinnamon|cinnamon-sessio|kwin_x11|kwin_wayland|plasmashell|ksmserver|plasma_session|startplasma-way|sway|i3|xfce4-session|mate-session|marco|lxqt-session|openbox|cryptsetup|codehydra)$'"
+EARLYOOM_ARGS="-r 300 -m 20,10 -s 100,100 --ignore-root-user --sort-by-rss"
