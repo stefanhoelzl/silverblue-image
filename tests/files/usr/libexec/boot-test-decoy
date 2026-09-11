@@ -1,0 +1,13 @@
+#!/usr/bin/python3
+# The process earlyoom must NOT pick, and the reason --sort-by-rss is configured at all.
+# oom_score_adj is denominated in thousandths of RAM+swap, so adj 800 is worth ~80% of
+# this machine's memory as phantom RSS: under the default oom_score ranking this tiny
+# process outranks the hog and dies first. Ranking by real RSS, it survives.
+import time
+
+with open("/proc/self/oom_score_adj", "w") as f:
+    f.write("800")
+
+ballast = bytearray(32 * 1024 * 1024)
+while True:
+    time.sleep(60)

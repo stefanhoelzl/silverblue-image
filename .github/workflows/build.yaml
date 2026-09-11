@@ -1,6 +1,10 @@
 name: build-image
 on:
+  # Branch pushes are covered by the pull request they belong to; running both would
+  # report two `build` checks on one commit, and the quick one could go green first.
   push:
+    branches: [main]
+  pull_request:
   schedule:
     - cron: '0 15 * * *'
   workflow_dispatch:
@@ -8,25 +12,41 @@ env:
   IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
   IMAGE_NAME: fedora-silverblue
   IMAGE_TAGS: latest
+  IMAGE_LOCAL: localhost/fedora-silverblue:latest
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
 
-      - uses: redhat-actions/buildah-build@v2.13
-        with:
-          tags: ${{ env.IMAGE_TAGS }}
-          containerfiles: |
-            ./Containerfile
-          image: ${{ env.IMAGE_NAME }}
+      # podman rather than the buildah action, because the boot test below has to run
+      # the image with `podman run --privileged` out of root's container storage, and
+      # because this is the same command the README gives for building locally.
+      - name: Build
+        run: sudo podman build -t "$IMAGE_LOCAL" .
 
-      - uses: redhat-actions/push-to-registry@v2.8
-        if: github.ref_name == 'main'
-        with:
-          image: ${{ env.IMAGE_NAME }}
-          tags: ${{ env.IMAGE_TAGS }}
-          registry: ${{ env.IMAGE_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
+      # Skipped on push to main: a pull request cannot merge until its branch is up to
+      # date with main, and the ruleset allows only rebase, so the tree that lands is the
+      # tree the pull request already booted. The nightly build has no pull request
+      # behind it - same Containerfile, freshly resolved packages - so it tests, and the
+      # publish below is in the same job and therefore waits on the result.
+      - name: Boot test
+        if: github.event_name != 'push'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 ovmf
+          sudo tests/boot-test.sh "$IMAGE_LOCAL"
+
+      - name: Push to GHCR
+        if: github.ref_name == 'main' && github.event_name != 'pull_request'
+        run: |
+          echo "${{ github.token }}" |
+            sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          sudo podman tag "$IMAGE_LOCAL" "$IMAGE_REGISTRY/$IMAGE_NAME:$IMAGE_TAGS"
+          sudo podman push "$IMAGE_REGISTRY/$IMAGE_NAME:$IMAGE_TAGS"

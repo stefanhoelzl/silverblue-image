@@ -1,0 +1,17 @@
+# The image under test, plus the few things a headless VM needs to be testable at all.
+# Everything added is a file under tests/files/, so the delta from the shipped image is
+# reviewable in a single diff:
+#   - GDM autologin, because uresourced and the notify-* scripts only exist inside a
+#     real user session;
+#   - sshd enabled, which the shipped image deliberately leaves off (81-desktop.preset
+#     disables it) and which the test needs as its transport;
+#   - a deliberately-failing unit, and the guest-side helper the scenarios drive.
+ARG BASE
+FROM ${BASE}
+
+COPY files/ /
+
+# uid 1000 so the session looks like a first real user, which is what uresourced
+# protects with MemoryMin.
+RUN useradd --create-home --uid 1000 tester && \
+    ostree container commit

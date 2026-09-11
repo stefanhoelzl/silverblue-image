@@ -1,0 +1,9 @@
+[Unit]
+Description=Deliberate failure, to exercise notify-failure
+# The whole point of this unit. The shipped units carry the same line; assert-boot.sh
+# checks that separately, so no real unit has to be broken to test the notifier.
+OnFailure=notify-failure@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/false
