@@ -67,12 +67,15 @@ ovmf_vars=/usr/share/OVMF/OVMF_VARS_4M.fd
 [[ -f $ovmf_vars ]] || ovmf_vars=/usr/share/OVMF/OVMF_VARS.fd
 cp "$ovmf_vars" "$WORK/vars.fd"
 
+# romfile= because nothing here PXE boots, and skipping the option ROM drops the
+# dependency on ipxe-qemu - only a Recommends of qemu-system-x86, and the package set this
+# job installs is the part of it that has been slow.
 qemu-system-x86_64 -accel kvm -m "$VM_MEM" -smp 4 -nographic -no-reboot \
     -drive "if=pflash,format=raw,readonly=on,file=$ovmf_code" \
     -drive "if=pflash,format=raw,file=$WORK/vars.fd" \
     -drive "file=$WORK/disk.raw,format=raw,if=virtio" \
     -netdev user,id=net0,hostfwd="tcp::$SSH_PORT-:22" \
-    -device virtio-net-pci,netdev=net0 \
+    -device virtio-net-pci,netdev=net0,romfile= \
     </dev/null >"$WORK/console.log" 2>&1 &
 QEMU_PID=$!
 
