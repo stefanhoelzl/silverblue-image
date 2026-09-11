@@ -21,7 +21,21 @@ as_user_unit() {
         "$@"
 }
 
+# Same, but synchronous and in the foreground.
+as_user() {
+    runuser -u "$TEST_USER" -- env \
+        XDG_RUNTIME_DIR="/run/user/${TEST_UID}" \
+        DBUS_SESSION_BUS_ADDRESS="$BUS" "$@"
+}
+
 case ${1:?usage: boot-test-helper <command> [args]} in
+
+# GNOME's shell instance is not stable across versions - historically @wayland, currently
+# @user - so report the one actually running rather than hard-coding a guess.
+shell-unit)
+    as_user systemctl --user list-units 'org.gnome.Shell@*.service' \
+        --state=active --no-legend --plain --no-pager | awk 'NR == 1 {print $1}'
+    ;;
 
 # busctl, not dbus-monitor: Silverblue ships dbus-broker without dbus-tools, and
 # --json=short is far steadier to parse than dbus-monitor's trace format.
