@@ -4,6 +4,8 @@
 # the ones after it; boot-test.sh collects the exit codes.
 
 SSH_PORT=${SSH_PORT:-2222}
+TEST_USER=tester
+TEST_UID=1000
 
 ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
           -o LogLevel=ERROR -o ConnectTimeout=5)
@@ -11,6 +13,13 @@ ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
 # Run a command in the VM as root. Takes a single string, handed to the guest's shell -
 # quote inside it exactly as you would for `bash -c`.
 vm() { ssh "${ssh_opts[@]}" -i "$SSH_KEY" -p "$SSH_PORT" root@127.0.0.1 "$*"; }
+
+# Run a command as the autologin user, on that user's session bus. The user manager is a
+# separate world: `systemctl --failed` as root cannot see a failed portal or shell.
+vm_user() {
+    vm "runuser -u $TEST_USER -- env XDG_RUNTIME_DIR=/run/user/$TEST_UID" \
+       "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$TEST_UID/bus $*"
+}
 
 FAILURES=0
 ok()   { printf '  ok    %s\n' "$*"; }
