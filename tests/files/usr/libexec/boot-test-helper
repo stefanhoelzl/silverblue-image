@@ -1,0 +1,56 @@
+#!/usr/bin/bash
+# Guest side of the boot test. Everything here either needs the test user's session bus
+# or has to outlive the ssh connection that starts it, both of which are painful to
+# express through ssh quoting - so the awkward half lives in the image and the scenarios
+# on the runner stay readable.
+
+set -euo pipefail
+
+readonly TEST_UID=1000
+readonly TEST_USER=tester
+readonly BUS="unix:path=/run/user/${TEST_UID}/bus"
+readonly TRACE=/var/tmp/boot-test-notifications.json
+
+# Run something as the test user, on that user's session bus, as a transient unit so it
+# survives the ssh connection and can be stopped by name later.
+as_user_unit() {
+    local unit=$1; shift
+    systemd-run --collect --quiet --unit="$unit" --uid="$TEST_UID" \
+        --setenv=XDG_RUNTIME_DIR="/run/user/${TEST_UID}" \
+        --setenv=DBUS_SESSION_BUS_ADDRESS="$BUS" \
+        "$@"
+}
+
+case ${1:?usage: boot-test-helper <command> [args]} in
+
+# busctl, not dbus-monitor: Silverblue ships dbus-broker without dbus-tools, and
+# --json=short is far steadier to parse than dbus-monitor's trace format.
+notify-watch)
+    # Each scenario wants its own trace, and they run in sequence - so restart rather
+    # than fail on a watcher the previous one left behind.
+    systemctl stop boot-test-notify-watch.service 2>/dev/null || true
+    rm -f "$TRACE"
+    as_user_unit boot-test-notify-watch -p StandardOutput="file:$TRACE" \
+        busctl monitor --user --json=short org.freedesktop.Notifications
+    ;;
+
+notify-trace)
+    cat "$TRACE" 2>/dev/null || true
+    ;;
+
+# Both processes must belong to the test user: earlyoom runs --ignore-root-user.
+oom-start)
+    systemctl stop boot-test-hog.service boot-test-decoy.service 2>/dev/null || true
+    as_user_unit boot-test-decoy /usr/libexec/boot-test-decoy
+    as_user_unit boot-test-hog   /usr/libexec/boot-test-hog
+    ;;
+
+oom-stop)
+    systemctl stop boot-test-hog.service boot-test-decoy.service 2>/dev/null || true
+    ;;
+
+*)
+    echo "boot-test-helper: unknown command '$1'" >&2
+    exit 2
+    ;;
+esac
