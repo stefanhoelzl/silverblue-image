@@ -36,12 +36,19 @@ jobs:
       # tree the pull request already booted. The nightly build has no pull request
       # behind it - same Containerfile, freshly resolved packages - so it tests, and the
       # publish below is in the same job and therefore waits on the result.
-      - name: Boot test
+      # --no-install-recommends keeps this to qemu and the firmware. With recommends it
+      # pulls in gstreamer, glib-networking and ~100 more packages, which on one run
+      # stalled for 11 minutes against a slow mirror - long enough on its own to blow the
+      # CI budget this job has to fit inside.
+      - name: Install qemu
         if: github.event_name != 'push'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 ovmf
-          sudo tests/boot-test.sh "$IMAGE_LOCAL"
+          sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 ovmf
+
+      - name: Boot test
+        if: github.event_name != 'push'
+        run: sudo tests/boot-test.sh "$IMAGE_LOCAL"
 
       - name: Push to GHCR
         if: github.ref_name == 'main' && github.event_name != 'pull_request'
