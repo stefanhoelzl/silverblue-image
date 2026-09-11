@@ -47,15 +47,22 @@ assert_eq "no failed user units" "" \
           "$(vm_user 'systemctl --user --failed --no-legend --plain --no-pager')"
 assert_eq "xdg-desktop-portal came up" "active" \
           "$(vm_user 'systemctl --user is-active xdg-desktop-portal.service')"
-assert_eq "gnome-shell came up" "active" \
-          "$(vm_user 'systemctl --user is-active org.gnome.Shell@wayland.service')"
-
 # The pins themselves, so the drop-ins are proven in force rather than merely present: an
 # unknown GIO module name does not fail loudly, it warns and falls back to the portal.
 assert_match "portal pinned off its own backends" 'GIO_USE_PROXY_RESOLVER=gnome' \
              "$(vm_user 'systemctl --user show -p Environment --value xdg-desktop-portal.service')"
-assert_match "gnome-shell pinned off the portal backends" 'GIO_USE_PROXY_RESOLVER=gnome' \
-             "$(vm_user 'systemctl --user show -p Environment --value org.gnome.Shell@wayland.service')"
+
+# Ask which shell instance is running and assert against that one. `systemctl show` will
+# happily report merged config for an instance that was never started, so naming a guess
+# here would pass whether or not the shell is pinned.
+shell_unit=$(vm '/usr/libexec/boot-test-helper shell-unit')
+if [[ -z $shell_unit ]]; then
+    fail "no org.gnome.Shell instance is running"
+else
+    ok "gnome-shell came up as $shell_unit"
+    assert_match "gnome-shell pinned off the portal backends" 'GIO_USE_PROXY_RESOLVER=gnome' \
+                 "$(vm_user "systemctl --user show -p Environment --value $shell_unit")"
+fi
 
 # Syntax only - no VM can show the uaccess ACL reaching an Apple device - but a rules file
 # that fails to parse stays silent until something is plugged in.
