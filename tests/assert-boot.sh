@@ -38,6 +38,34 @@ assert_eq "vm.page-cluster" "0" "$(vm 'sysctl -n vm.page-cluster')"
 assert_eq "user@1000 MemoryMin is 1 GiB" "1073741824" \
           "$(vm 'systemctl show -p MemoryMin --value user@1000.service')"
 
+# The user manager, which the checks above cannot reach. Both GIO drop-ins exist to keep a
+# *user* unit from failing: when xdg-desktop-portal self-calls, it burns four 25s D-Bus
+# timeouts, overruns TimeoutStartSec=45s, and GDM bounces the login back to the greeter.
+assert_eq "test user has an active session" "active" \
+          "$(vm 'loginctl show-user tester --value -p State')"
+assert_eq "no failed user units" "" \
+          "$(vm_user 'systemctl --user --failed --no-legend --plain --no-pager')"
+assert_eq "xdg-desktop-portal came up" "active" \
+          "$(vm_user 'systemctl --user is-active xdg-desktop-portal.service')"
+assert_eq "gnome-shell came up" "active" \
+          "$(vm_user 'systemctl --user is-active org.gnome.Shell@wayland.service')"
+
+# The pins themselves, so the drop-ins are proven in force rather than merely present: an
+# unknown GIO module name does not fail loudly, it warns and falls back to the portal.
+assert_match "portal pinned off its own backends" 'GIO_USE_PROXY_RESOLVER=gnome' \
+             "$(vm_user 'systemctl --user show -p Environment --value xdg-desktop-portal.service')"
+assert_match "gnome-shell pinned off the portal backends" 'GIO_USE_PROXY_RESOLVER=gnome' \
+             "$(vm_user 'systemctl --user show -p Environment --value org.gnome.Shell@wayland.service')"
+
+# Syntax only - no VM can show the uaccess ACL reaching an Apple device - but a rules file
+# that fails to parse stays silent until something is plugged in.
+shopt -s nullglob
+for rules in "$(dirname "$0")"/../files/usr/lib/udev/rules.d/*.rules; do
+    name=$(basename "$rules")
+    assert_match "udev rules $name parse" 'Fail: +0' \
+                 "$(vm "udevadm verify /usr/lib/udev/rules.d/$name 2>&1")"
+done
+
 # The notify-failure wiring itself, so the scenario that exercises the notifier against a
 # test unit cannot pass while the shipped units have quietly lost their OnFailure line.
 for unit in make-swapfile.service var-swap-swapfile.swap; do
