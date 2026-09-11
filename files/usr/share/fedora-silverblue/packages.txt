@@ -10,7 +10,6 @@ mozilla-openh264
 
 # HEIF/HEIC images
 libheif-freeworld
-heif-pixbuf-loader
 libheif-tools
 
 # Proton VPN and its tray icon.
