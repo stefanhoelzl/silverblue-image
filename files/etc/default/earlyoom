@@ -35,14 +35,19 @@
 #                   It does shield a runaway root process, but with rootless podman the
 #                   builds this is aimed at are user-owned.
 #
-#   -m 20,10        SIGTERM at 20% of earlyoom's "user mem total" (MemAvailable+AnonPages),
-#                   SIGKILL at 10%. The default -m 4 is far too late on this machine:
-#                   headroom for the app is ~17 GB against a 17-20 GB working set, so by
-#                   10% it is already thrashing. 20% fires while the desktop still responds.
+#   -m 10,5         SIGTERM at 10% of earlyoom's "user mem total" (MemAvailable+AnonPages),
+#                   SIGKILL at 5%. The default -m 4 is too late: that total is only ~21.5
+#                   GiB of this 31 GiB machine (compressed swap and the kernel take the
+#                   rest), so 4% is ~860 MiB. 20,10 was tried first, set when zram was the
+#                   only swap, and killed 12 times in 4 days - Gradle daemons re-killed
+#                   every 15 minutes - with half the swap free and memory PSI "full" at
+#                   0.04% of uptime, so nothing was thrashing. The likely reason: the
+#                   swapfile gives the kernel somewhere to evict to, so the desktop keeps
+#                   responding at lower headroom.
 #
 #   -M dropped      The default -M 409600 caps the trigger at 400 MiB available, and
 #                   earlyoom uses the LOWER of -m and -M. Keeping it would pin the
-#                   threshold at 400 MiB and make -m 20,10 dead weight.
+#                   threshold at 400 MiB and make -m 10,5 dead weight.
 #
 #   -s 100,100      Ignore swap entirely. earlyoom needs BOTH memory and swap below their
 #                   thresholds, and var-swap-swapfile.swap adds 32 GiB of mostly-free swap
@@ -57,4 +62,4 @@
 #
 # More documentation at `man earlyoom` or `earlyoom -h`.
 
-EARLYOOM_ARGS="-r 300 -m 20,10 -s 100,100 --ignore-root-user --sort-by-rss"
+EARLYOOM_ARGS="-r 300 -m 10,5 -s 100,100 --ignore-root-user --sort-by-rss"

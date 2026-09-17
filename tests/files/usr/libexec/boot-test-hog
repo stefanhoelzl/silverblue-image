@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # The process earlyoom is meant to pick: large RSS, default oom_score_adj. Grows at
-# ~320 MiB/s - fast enough to trip -m 20,10 promptly, slow enough that earlyoom (which
+# ~320 MiB/s - fast enough to trip -m 10,5 promptly, slow enough that earlyoom (which
 # polls) sees it before the kernel OOM killer does.
 import time
 
