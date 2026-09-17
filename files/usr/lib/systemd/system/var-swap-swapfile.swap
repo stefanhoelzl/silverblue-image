@@ -9,10 +9,8 @@ OnFailure=notify-failure@%n.service
 
 [Swap]
 What=/var/swap/swapfile
-# Must stay below zram's priority 100 so zram is used first and this is overflow only. At
-# 100 the kernel stripes across both; above it, pages go to NVMe while compressed RAM sits
-# free. Note that Priority= in this section is ignored when pri= appears in Options=.
-Options=pri=10
+# The only swap device; zswap (usr/lib/tmpfiles.d/zswap.conf) compresses in front of it, so
+# there is no second device whose priority this would need to sit below.
 
 [Install]
 WantedBy=swap.target

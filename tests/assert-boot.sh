@@ -17,11 +17,14 @@ for unit in earlyoom.service notify-oom-kill.service make-swapfile.service \
     assert_eq "$unit active" "active" "$(vm "systemctl is-active $unit")"
 done
 
-# The swapfile must sit below zram, or the compressed RAM this machine is tuned around
-# gets bypassed in favour of NVMe.
-swaps=$(vm 'swapon --show=NAME,PRIO --noheadings')
-assert_match "zram swap at priority 100" '/dev/zram0 +100' "$swaps"
-assert_match "disk swapfile at priority 10" '/var/swap/swapfile +10' "$swaps"
+# The swapfile must be the only swap. A zram device left beside it would take every page
+# ahead of zswap and put back the full-zram, fresh-pages-to-disk inversion zswap replaces.
+assert_eq "disk swapfile is the only swap" "/var/swap/swapfile" \
+          "$(vm 'swapon --show=NAME --noheadings')"
+# zswap.conf is only a request to tmpfiles; read back what the kernel accepted, since a
+# refused write (SELinux on sysfs, the zstd module not loading) leaves lzo or zswap off.
+assert_eq "zswap enabled" "Y" "$(vm 'cat /sys/module/zswap/parameters/enabled')"
+assert_eq "zswap compressor" "zstd" "$(vm 'cat /sys/module/zswap/parameters/compressor')"
 
 assert_eq "/var is btrfs" "btrfs" "$(vm 'findmnt -no FSTYPE --target /var')"
 assert_eq "SELinux enforcing" "Enforcing" "$(vm 'getenforce')"
