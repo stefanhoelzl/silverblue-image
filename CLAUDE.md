@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Builds a custom Fedora Silverblue container image: RPM Fusion codecs, AMD hardware video
-decode, HEIF support, Proton VPN, a few tools, and memory/coredump tuning for zram-only
-swap. Published to GitHub Container Registry and rebased onto with rpm-ostree.
+decode, HEIF support, Proton VPN, a few tools, and memory/coredump tuning for zswap in
+front of a disk swapfile. Published to GitHub Container Registry and rebased onto with rpm-ostree.
 
 ## Repository layout
 
