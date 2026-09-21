@@ -8,8 +8,10 @@
 gstreamer1-plugin-openh264
 mozilla-openh264
 
-# HEIF/HEIC images
-libheif-freeworld
+# HEIF/HEIC images.
+# HEIC decode comes from Fedora's own libheif-ffmpeg plugin running on RPM Fusion's
+# ffmpeg-libs. Not libheif-freeworld: RPM Fusion's build pins an older libheif than the one
+# the base image ships, which fails the transaction.
 libheif-tools
 
 # Proton VPN and its tray icon.
