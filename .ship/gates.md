@@ -1,0 +1,19 @@
+## Script syntax
+The build only copies these in; nothing runs them until the target machine boots, so a syntax
+error would ship silently. `bash -n` reads one script per call.
+```bash
+for script in files/usr/libexec/* tests/files/usr/libexec/boot-test-helper; do bash -n "$script" || exit 1; done
+```
+
+## Boot test syntax
+The boot test only runs in CI (it needs real root for a loop device), so a syntax error in it
+would otherwise surface there.
+```bash
+for script in tests/*.sh; do bash -n "$script" || exit 1; done
+```
+
+## Build and lint
+The build is the test - its final step is `bootc container lint --fatal-warnings`.
+```bash
+podman build -t fedora-silverblue:ship-gate .
+```
