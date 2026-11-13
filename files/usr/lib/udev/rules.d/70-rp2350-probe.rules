@@ -17,4 +17,8 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="2e8a", TAG+="uaccess"
 # unrelated products, so this one is matched by product.
 SUBSYSTEM=="usb", ATTR{idVendor}=="15ba", ATTR{idProduct}=="0052", TAG+="uaccess"
 
+# pid.codes test PID (1209:0001), for the probe firmware while it is in development. It is
+# shared by anyone's test firmware, so it is matched by product, not by pid.codes' whole vendor.
+SUBSYSTEM=="usb", ATTR{idVendor}=="1209", ATTR{idProduct}=="0001", TAG+="uaccess"
+
 # The probe firmware's own VID:PID gets a line here once it is chosen.
