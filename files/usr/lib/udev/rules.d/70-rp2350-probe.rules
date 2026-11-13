@@ -1,0 +1,20 @@
+# Access to the RP2350-based debug probe and its boot ROM for libusb tools - pyusb, picotool,
+# probe-rs, OpenOCD, pyOCD - including from a rootless podman container run with
+# --userns=keep-id and /dev/bus/usb bind-mounted, where the ACL for the seat user's uid is
+# what lets the container open the node.
+#
+# uaccess grants the device to whoever is logged in at the local seat, via an ACL that
+# follows session changes, instead of widening the node's mode bits for every process on the
+# machine. The rule has to run before systemd's 73-seat-late.rules, which is what applies the
+# ACL to tagged devices. As with Apple devices, a session with no seat (SSH) gets no ACL.
+
+# Raspberry Pi (vendor 2e8a), matched whole like Apple's vendor is: it covers the boot ROMs
+# in BOOTSEL mode (RP2350 2e8a:000f, RP2040 2e8a:0003) and the Raspberry Pi Debug Probe
+# (2e8a:000c) without a line per product.
+SUBSYSTEM=="usb", ATTR{idVendor}=="2e8a", TAG+="uaccess"
+
+# Olimex PICO2-BB48 module with its factory CircuitPython firmware. Olimex's vendor ID covers
+# unrelated products, so this one is matched by product.
+SUBSYSTEM=="usb", ATTR{idVendor}=="15ba", ATTR{idProduct}=="0052", TAG+="uaccess"
+
+# The probe firmware's own VID:PID gets a line here once it is chosen.

@@ -67,7 +67,7 @@ else
                  "$(vm_user "systemctl --user show -p Environment --value $shell_unit")"
 fi
 
-# Syntax only - no VM can show the uaccess ACL reaching an Apple device - but a rules file
+# Syntax only - no VM can show the uaccess ACL reaching a real USB device - but a rules file
 # that fails to parse stays silent until something is plugged in.
 shopt -s nullglob
 for rules in "$(dirname "$0")"/../files/usr/lib/udev/rules.d/*.rules; do
